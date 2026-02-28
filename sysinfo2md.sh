@@ -4,6 +4,8 @@
 
 set -euo pipefail
 
+VERSION="1.1.0"
+
 OUTPUT_FILE="$HOME/sysinfo.md"
 COPY_TO_CLIPBOARD=false
 CLIPBOARD_ONLY=false
@@ -21,6 +23,7 @@ Options:
   -o, --output FILE    Output file path (default: ~/sysinfo.md)
   -c, --clipboard      Write to file AND copy to clipboard
   -C, --clipboard-only Copy to clipboard only, do not write a file
+  -v, --version        Show version and exit
   -h, --help           Show this help message and exit
 
 Clipboard backends (tried in order): wl-copy (Wayland), xclip, xsel
@@ -40,6 +43,10 @@ while [[ $# -gt 0 ]]; do
         -C|--clipboard-only)
             CLIPBOARD_ONLY=true
             shift
+            ;;
+        -v|--version)
+            echo "sysinfo2md $VERSION"
+            exit 0
             ;;
         -h|--help)
             usage
