@@ -12,7 +12,7 @@ A simple Linux command that collects system hardware and software information an
 ## Installation
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/sysinfo2md.git
+git clone https://github.com/jhicksdev/sysinfo2md.git
 cd sysinfo2md
 bash install.sh
 ```
