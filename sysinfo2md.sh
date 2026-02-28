@@ -79,6 +79,9 @@ copy_to_clipboard() {
 section_os() {
     echo "## Operating System"
     echo ""
+    if [[ -r /sys/class/dmi/id/product_name ]]; then
+        echo "- **Model**: $(< /sys/class/dmi/id/product_name)"
+    fi
     if [[ -f /etc/os-release ]]; then
         # shellcheck source=/dev/null
         source /etc/os-release
@@ -90,6 +93,10 @@ section_os() {
     if [[ -n "${XDG_SESSION_TYPE:-}" ]]; then
         echo "- **Session type**: $XDG_SESSION_TYPE"
     fi
+    local uptime_str
+    uptime_str=$(uptime -p 2>/dev/null | sed 's/^up //')
+    [[ -n "$uptime_str" ]] && echo "- **Uptime**: $uptime_str"
+    echo "- **Locale**: ${LANG:-unknown}"
 }
 
 section_cpu() {
@@ -191,7 +198,37 @@ section_desktop() {
         echo "- **Display server**: $XDG_SESSION_TYPE"
         found=true
     fi
-    # Wayland compositor detection
+    # Display manager
+    local dm_id
+    dm_id=$(systemctl show display-manager.service --no-pager --property=Id 2>/dev/null \
+        | cut -d= -f2 | sed 's/\.service$//')
+    if [[ -n "$dm_id" && "$dm_id" != "Id" ]]; then
+        local dm_ver=""
+        if command -v "$dm_id" &>/dev/null; then
+            dm_ver=$("$dm_id" --version 2>/dev/null | head -1 | xargs) || true
+        fi
+        echo "- **Display manager**: $dm_id${dm_ver:+ $dm_ver}"
+        found=true
+    fi
+    # Window manager
+    local wm=""
+    for wm_bin in kwin_wayland kwin_x11 mutter gnome-shell openbox i3 sway bspwm xfwm4 marco fluxbox icewm; do
+        if pgrep -x "$wm_bin" &>/dev/null; then
+            wm="$wm_bin"
+            break
+        fi
+    done
+    [[ -n "$wm" ]] && echo "- **Window manager**: $wm" && found=true
+    # Screen resolution
+    local resolution=""
+    if command -v xrandr &>/dev/null && [[ -n "${DISPLAY:-}" ]]; then
+        resolution=$(xrandr 2>/dev/null | grep ' connected' | grep -oP '\d+x\d+(?=\+)' | head -1 || true)
+    fi
+    if [[ -z "$resolution" ]]; then
+        resolution=$(cat /sys/class/drm/*/modes 2>/dev/null | head -1 || true)
+    fi
+    [[ -n "$resolution" ]] && echo "- **Resolution**: $resolution" && found=true
+    # Wayland/X display
     if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
         echo "- **Wayland display**: $WAYLAND_DISPLAY"
         found=true
@@ -199,6 +236,25 @@ section_desktop() {
     if [[ -n "${DISPLAY:-}" ]]; then
         echo "- **X display**: $DISPLAY"
         found=true
+    fi
+    # KDE theme and icons
+    if [[ -f ~/.config/kdeglobals ]]; then
+        local kde_theme kde_icons
+        kde_theme=$(awk -F= '/^\[KDE\]/{s=1;next} /^\[/{s=0} s && /^LookAndFeelPackage=/{print $2;exit}' \
+            ~/.config/kdeglobals 2>/dev/null || true)
+        kde_icons=$(awk -F= '/^\[Icons\]/{s=1;next} /^\[/{s=0} s && /^Theme=/{print $2;exit}' \
+            ~/.config/kdeglobals 2>/dev/null || true)
+        [[ -n "$kde_theme" ]] && echo "- **Theme**: $kde_theme" && found=true
+        [[ -n "$kde_icons" ]] && echo "- **Icons**: $kde_icons" && found=true
+    fi
+    # GTK theme and font
+    local gtk_cfg=~/.config/gtk-3.0/settings.ini
+    if [[ -f "$gtk_cfg" ]]; then
+        local gtk_theme gtk_font
+        gtk_theme=$(grep '^gtk-theme-name=' "$gtk_cfg" | cut -d= -f2 | xargs || true)
+        gtk_font=$(grep '^gtk-font-name=' "$gtk_cfg" | cut -d= -f2 | xargs || true)
+        [[ -n "$gtk_theme" ]] && echo "- **GTK theme**: $gtk_theme" && found=true
+        [[ -n "$gtk_font" ]] && echo "- **Font**: $gtk_font" && found=true
     fi
     if ! $found; then
         echo "_Could not detect desktop environment (may be running headless)._"
