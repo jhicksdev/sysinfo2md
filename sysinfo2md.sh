@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VERSION="0.3.0"
+VERSION="0.4.0"
 
 OUTPUT_FILE="$HOME/sysinfo.md"
 COPY_TO_CLIPBOARD=false
@@ -127,6 +127,15 @@ section_cpu() {
     if [[ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor ]]; then
         echo "- **Governor**: $(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor)"
     fi
+    local cpu_temp=""
+    if command -v sensors &>/dev/null; then
+        cpu_temp=$(sensors 2>/dev/null | grep -E '^(Tctl|Package id 0|Core 0):' | head -1 | grep -oP '[+-]\d+\.\d+' | head -1 || true)
+        [[ -n "$cpu_temp" ]] && cpu_temp="${cpu_temp}°C"
+    fi
+    if [[ -z "$cpu_temp" ]] && [[ -f /sys/class/thermal/thermal_zone0/temp ]]; then
+        cpu_temp=$(awk '{printf "%.1f°C", $1/1000}' /sys/class/thermal/thermal_zone0/temp)
+    fi
+    [[ -n "$cpu_temp" ]] && echo "- **Temperature**: $cpu_temp"
 }
 
 section_memory() {
@@ -317,6 +326,37 @@ section_packages() {
     fi
 }
 
+section_battery() {
+    local bat_dir=""
+    for d in /sys/class/power_supply/BAT*; do
+        [[ -d "$d" ]] && bat_dir="$d" && break
+    done
+    [[ -z "$bat_dir" ]] && return
+
+    echo "## Battery"
+    echo ""
+    local capacity status
+    capacity=$(cat "$bat_dir/capacity" 2>/dev/null)
+    status=$(cat "$bat_dir/status" 2>/dev/null)
+    [[ -n "$capacity" ]] && echo "- **Charge**: ${capacity}%"
+    [[ -n "$status" ]] && echo "- **Status**: $status"
+    if [[ -f "$bat_dir/power_now" ]]; then
+        local power_uw
+        power_uw=$(cat "$bat_dir/power_now" 2>/dev/null)
+        if [[ -n "$power_uw" && "$power_uw" -gt 0 ]]; then
+            echo "- **Power draw**: $(awk "BEGIN {printf \"%.1fW\", $power_uw/1000000}")"
+        fi
+    fi
+    if [[ "$status" == "Discharging" && -f "$bat_dir/energy_now" && -f "$bat_dir/power_now" ]]; then
+        local energy_now power_now
+        energy_now=$(cat "$bat_dir/energy_now" 2>/dev/null)
+        power_now=$(cat "$bat_dir/power_now" 2>/dev/null)
+        if [[ -n "$energy_now" && -n "$power_now" && "$power_now" -gt 0 ]]; then
+            echo "- **Time remaining**: ~$(awk "BEGIN {printf \"%.1fh\", $energy_now/$power_now}")"
+        fi
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -346,6 +386,8 @@ build_markdown() {
     section_shell_and_term
     echo ""
     section_packages
+    echo ""
+    section_battery
 }
 
 CONTENT=$(build_markdown)
