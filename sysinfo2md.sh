@@ -4,11 +4,12 @@
 
 set -euo pipefail
 
-VERSION="1.1.0"
+VERSION="1.2.0"
 
 OUTPUT_FILE="$HOME/sysinfo.md"
 COPY_TO_CLIPBOARD=false
 CLIPBOARD_ONLY=false
+STDOUT_ONLY=false
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -21,6 +22,7 @@ Collect system hardware and software information and write it to a Markdown file
 
 Options:
   -o, --output FILE    Output file path (default: ~/sysinfo.md)
+  -s, --stdout         Print to stdout instead of writing a file
   -c, --clipboard      Write to file AND copy to clipboard
   -C, --clipboard-only Copy to clipboard only, do not write a file
   -v, --version        Show version and exit
@@ -35,6 +37,10 @@ while [[ $# -gt 0 ]]; do
         -o|--output)
             OUTPUT_FILE="$2"
             shift 2
+            ;;
+        -s|--stdout)
+            STDOUT_ONLY=true
+            shift
             ;;
         -c|--clipboard)
             COPY_TO_CLIPBOARD=true
@@ -344,7 +350,9 @@ build_markdown() {
 
 CONTENT=$(build_markdown)
 
-if $CLIPBOARD_ONLY; then
+if $STDOUT_ONLY; then
+    printf '%s\n' "$CONTENT"
+elif $CLIPBOARD_ONLY; then
     copy_to_clipboard "$CONTENT"
 else
     printf '%s\n' "$CONTENT" > "$OUTPUT_FILE"
