@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] - 2026-02-28
+
+### Changed
+
+- `uptime -p` now falls back to parsing `/proc/uptime` directly on systems where the `-p` flag is unavailable (e.g. busybox)
+- CPU model detection now falls back to `Hardware` field and `/proc/device-tree/model` for ARM systems
+- CPU frequency now falls back to `/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq` when `/proc/cpuinfo` has no `cpu MHz` field
+- `free -h --si` now falls back to `free -h` on systems without `--si` support
+- Network section now falls back from `ip -brief` to `ip address` or `ifconfig`
+- Display manager detection now guards against non-systemd systems
+- Theme/icons/font detection now uses `gsettings` for GNOME and other non-KDE desktops
+
 ## [0.5.0] - 2026-02-28
 
 ### Changed

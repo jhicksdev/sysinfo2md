@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VERSION="0.5.0"
+VERSION="0.6.0"
 
 OUTPUT_FILE="$HOME/sysinfo.md"
 COPY_TO_CLIPBOARD=false
@@ -108,6 +108,15 @@ section_os() {
     fi
     local uptime_str
     uptime_str=$(uptime -p 2>/dev/null | sed 's/^up //')
+    if [[ -z "$uptime_str" ]] && [[ -f /proc/uptime ]]; then
+        local secs days hours mins
+        secs=$(awk '{print int($1)}' /proc/uptime)
+        days=$((secs / 86400)); hours=$(( (secs % 86400) / 3600 )); mins=$(( (secs % 3600) / 60 ))
+        [[ $days -gt 0 ]] && uptime_str="${days}d "
+        [[ $hours -gt 0 ]] && uptime_str="${uptime_str}${hours}h "
+        [[ $mins -gt 0 ]] && uptime_str="${uptime_str}${mins}m"
+        uptime_str="${uptime_str% }"
+    fi
     [[ -n "$uptime_str" ]] && echo "- **Uptime**: $uptime_str"
     echo "- **Locale**: ${LANG:-unknown}"
 }
@@ -117,9 +126,18 @@ section_cpu() {
     echo ""
     local model cores threads freq
     model=$(grep -m1 "^model name" /proc/cpuinfo | cut -d: -f2- | xargs)
+    if [[ -z "$model" ]]; then
+        model=$(grep -m1 "^Hardware" /proc/cpuinfo | cut -d: -f2- | xargs)
+    fi
+    if [[ -z "$model" ]] && [[ -f /proc/device-tree/model ]]; then
+        model=$(tr -d '\0' < /proc/device-tree/model)
+    fi
     cores=$(grep -m1 "^cpu cores" /proc/cpuinfo | cut -d: -f2 | xargs)
     threads=$(grep -c "^processor" /proc/cpuinfo)
     freq=$(grep -m1 "^cpu MHz" /proc/cpuinfo | cut -d: -f2 | xargs | awk '{printf "%.1f GHz", $1/1000}')
+    if [[ -z "$freq" ]] && [[ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq ]]; then
+        freq=$(awk '{printf "%.1f GHz", $1/1000000}' /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq)
+    fi
     echo "- **Model**: ${model:-unknown}"
     echo "- **Physical cores**: ${cores:-unknown}"
     echo "- **Logical threads**: $threads"
@@ -147,7 +165,7 @@ section_memory() {
     echo "## Memory (RAM)"
     echo ""
     echo '```'
-    free -h --si
+    free -h --si 2>/dev/null || free -h
     echo '```'
 }
 
@@ -210,7 +228,13 @@ section_network() {
     echo ""
     echo "### Interfaces"
     echo '```'
-    ip -brief address
+    if command -v ip &>/dev/null; then
+        ip -brief address 2>/dev/null || ip address
+    elif command -v ifconfig &>/dev/null; then
+        ifconfig
+    else
+        echo "_No network tool available (ip, ifconfig)._"
+    fi
     echo '```'
 }
 
@@ -231,9 +255,11 @@ section_desktop() {
         found=true
     fi
     # Display manager
-    local dm_id
-    dm_id=$(systemctl show display-manager.service --no-pager --property=Id 2>/dev/null \
-        | cut -d= -f2 | sed 's/\.service$//')
+    local dm_id=""
+    if command -v systemctl &>/dev/null; then
+        dm_id=$(systemctl show display-manager.service --no-pager --property=Id 2>/dev/null \
+            | cut -d= -f2 | sed 's/\.service$//')
+    fi
     if [[ -n "$dm_id" && "$dm_id" != "Id" ]]; then
         local dm_ver=""
         if command -v "$dm_id" &>/dev/null; then
@@ -279,15 +305,24 @@ section_desktop() {
         [[ -n "$kde_theme" ]] && echo "- **Theme**: $kde_theme" && found=true
         [[ -n "$kde_icons" ]] && echo "- **Icons**: $kde_icons" && found=true
     fi
-    # GTK theme and font
+    # GTK/GNOME theme, icons, and font
+    local gtk_theme="" gtk_icons="" gtk_font=""
     local gtk_cfg=~/.config/gtk-3.0/settings.ini
     if [[ -f "$gtk_cfg" ]]; then
-        local gtk_theme gtk_font
         gtk_theme=$(grep '^gtk-theme-name=' "$gtk_cfg" | cut -d= -f2 | xargs || true)
         gtk_font=$(grep '^gtk-font-name=' "$gtk_cfg" | cut -d= -f2 | xargs || true)
-        [[ -n "$gtk_theme" ]] && echo "- **GTK theme**: $gtk_theme" && found=true
-        [[ -n "$gtk_font" ]] && echo "- **Font**: $gtk_font" && found=true
+    elif command -v gsettings &>/dev/null; then
+        gtk_theme=$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null | tr -d "'" || true)
+        gtk_icons=$(gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null | tr -d "'" || true)
+        gtk_font=$(gsettings get org.gnome.desktop.interface font-name 2>/dev/null | tr -d "'" || true)
     fi
+    if [[ -f ~/.config/kdeglobals ]]; then
+        [[ -n "$gtk_theme" ]] && echo "- **GTK theme**: $gtk_theme" && found=true
+    else
+        [[ -n "$gtk_theme" ]] && echo "- **Theme**: $gtk_theme" && found=true
+        [[ -n "$gtk_icons" ]] && echo "- **Icons**: $gtk_icons" && found=true
+    fi
+    [[ -n "$gtk_font" ]] && echo "- **Font**: $gtk_font" && found=true
     if ! $found; then
         echo "_Could not detect desktop environment (may be running headless)._"
     fi
