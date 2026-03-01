@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] - 2026-02-28
+
+### Changed
+
+- CPU frequency now displays in GHz instead of MHz (e.g. `3.4 GHz`)
+- CPU temperature no longer shows a leading `+` sign (e.g. `56.4°C`)
+- GPU output strips verbose vendor prefix and PCI class label (e.g. `AMD Krackan [Radeon 840M / 860M Graphics]`)
+
+### Added
+
+- Fan speed to the CPU section (via `sensors`, non-zero RPM only)
+
 ## [0.4.0] - 2026-02-28
 
 ### Added

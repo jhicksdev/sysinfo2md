@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VERSION="0.4.0"
+VERSION="0.5.0"
 
 OUTPUT_FILE="$HOME/sysinfo.md"
 COPY_TO_CLIPBOARD=false
@@ -119,7 +119,7 @@ section_cpu() {
     model=$(grep -m1 "^model name" /proc/cpuinfo | cut -d: -f2- | xargs)
     cores=$(grep -m1 "^cpu cores" /proc/cpuinfo | cut -d: -f2 | xargs)
     threads=$(grep -c "^processor" /proc/cpuinfo)
-    freq=$(grep -m1 "^cpu MHz" /proc/cpuinfo | cut -d: -f2 | xargs | awk '{printf "%.0f MHz", $1}')
+    freq=$(grep -m1 "^cpu MHz" /proc/cpuinfo | cut -d: -f2 | xargs | awk '{printf "%.1f GHz", $1/1000}')
     echo "- **Model**: ${model:-unknown}"
     echo "- **Physical cores**: ${cores:-unknown}"
     echo "- **Logical threads**: $threads"
@@ -129,13 +129,18 @@ section_cpu() {
     fi
     local cpu_temp=""
     if command -v sensors &>/dev/null; then
-        cpu_temp=$(sensors 2>/dev/null | grep -E '^(Tctl|Package id 0|Core 0):' | head -1 | grep -oP '[+-]\d+\.\d+' | head -1 || true)
+        cpu_temp=$(sensors 2>/dev/null | grep -E '^(Tctl|Package id 0|Core 0):' | head -1 | grep -oP '[+-]\d+\.\d+' | head -1 | sed 's/^+//' || true)
         [[ -n "$cpu_temp" ]] && cpu_temp="${cpu_temp}°C"
     fi
     if [[ -z "$cpu_temp" ]] && [[ -f /sys/class/thermal/thermal_zone0/temp ]]; then
         cpu_temp=$(awk '{printf "%.1f°C", $1/1000}' /sys/class/thermal/thermal_zone0/temp)
     fi
     [[ -n "$cpu_temp" ]] && echo "- **Temperature**: $cpu_temp"
+    local fan_speed=""
+    if command -v sensors &>/dev/null; then
+        fan_speed=$(sensors 2>/dev/null | grep -E '^fan[0-9]+:' | grep -v '\s0 RPM' | head -1 | awk '{print $2, $3}' || true)
+    fi
+    [[ -n "$fan_speed" ]] && echo "- **Fan speed**: $fan_speed"
 }
 
 section_memory() {
@@ -151,7 +156,12 @@ section_gpu() {
     echo ""
     if command -v lspci &>/dev/null; then
         local gpus
-        gpus=$(lspci | grep -iE 'VGA|3D controller|Display controller' | sed 's/^[^ ]* //')
+        gpus=$(lspci | grep -iE 'VGA|3D controller|Display controller' \
+            | sed 's/^[^ ]* //' \
+            | sed 's/^[^:]*: //' \
+            | sed 's/Advanced Micro Devices, Inc\. \[AMD\/ATI\]/AMD/' \
+            | sed 's/NVIDIA Corporation/NVIDIA/' \
+            | sed 's/Intel Corporation/Intel/')
         if [[ -n "$gpus" ]]; then
             while IFS= read -r gpu; do
                 echo "- $gpu"
