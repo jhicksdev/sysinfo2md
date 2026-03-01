@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VERSION="0.6.0"
+VERSION="0.6.1"
 
 OUTPUT_FILE="$HOME/sysinfo.md"
 COPY_TO_CLIPBOARD=false
@@ -93,7 +93,7 @@ section_os() {
     echo "## Operating System"
     echo ""
     if [[ -r /sys/class/dmi/id/product_name ]]; then
-        echo "- **Model**: $(< /sys/class/dmi/id/product_name)"
+        echo "- **Device**: $(< /sys/class/dmi/id/product_name)"
     fi
     if [[ -f /etc/os-release ]]; then
         # shellcheck source=/dev/null
