@@ -23,7 +23,7 @@ All logic lives in `sysinfo2md.sh`. Each section of the Markdown output is its o
 
 **Before submitting a pull request:**
 
-- Test the script end-to-end: `sysinfo2md -o /tmp/test.md && cat /tmp/test.md`
+- Test the script end-to-end: `sysinfo2md --stdout` or `sysinfo2md -o /tmp/test.md && cat /tmp/test.md`
 - Make sure the script passes with `bash -n sysinfo2md.sh` (syntax check)
 - If adding a new section, add an entry for it in the README feature list
 
@@ -31,7 +31,8 @@ All logic lives in `sysinfo2md.sh`. Each section of the Markdown output is its o
 
 - Pure Bash — no Python, no external scripts
 - Use `local` for all function-scoped variables
-- Suppress expected errors with `2>/dev/null` and provide a fallback message rather than letting sections silently disappear
+- Guard all optional commands with `command -v` and provide a graceful fallback
+- Suppress expected errors with `2>/dev/null` rather than letting sections silently disappear
 - Keep new section functions consistent with the existing pattern:
   ```bash
   section_foo() {
@@ -40,6 +41,16 @@ All logic lives in `sysinfo2md.sh`. Each section of the Markdown output is its o
       # ... content ...
   }
   ```
+
+## Versioning
+
+This project follows [Semantic Versioning](https://semver.org/):
+
+- **Patch** (`0.x.1`) — bug fixes and small corrections
+- **Minor** (`0.x+1.0`) — new features or sections
+- **Major** (`1.0.0`) — first full, polished release (reserved)
+
+When bumping the version, update `VERSION` in `sysinfo2md.sh` and add an entry to `CHANGELOG.md`.
 
 ## Submitting a pull request
 
