@@ -21,9 +21,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.0.0] - 2026-02-28
 
+Initial release of `sysinfo2md` — a simple Linux command that collects system hardware and software information and writes it to a Markdown file.
+
 ### Added
 
-- Initial release of `sysinfo2md`
 - Collects OS, CPU, GPU, RAM, storage, network, desktop environment, shell, and package information
 - Writes output to a Markdown file (default: `~/sysinfo.md`)
 - `-o` / `--output` flag to specify a custom output path
