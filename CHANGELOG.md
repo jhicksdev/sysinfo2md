@@ -4,13 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.2.0] - 2026-02-28
+## [0.3.0] - 2026-02-28
 
 ### Added
 
 - `-s` / `--stdout` flag to print output to stdout instead of writing a file
 
-## [1.1.0] - 2026-02-28
+## [0.2.0] - 2026-02-28
 
 ### Added
 
@@ -25,7 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `-v` / `--version` flag to print the current version and exit
 - `.claude/` to `.gitignore`
 
-## [1.0.0] - 2026-02-28
+## [0.1.0] - 2026-02-28
 
 Initial release of `sysinfo2md` — a simple Linux command that collects system hardware and software information and writes it to a Markdown file.
 
