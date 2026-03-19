@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.0] - 2026-03-19
+
+### Added
+
+- Modular section registry: sections registered and iterated dynamically via `register_section()`
+- `--only SECTIONS` (`-n`): include only specified sections (e.g. `--only os,cpu,gpu`)
+- `--exclude SECTIONS` (`-e`): exclude specified sections (e.g. `--exclude battery,packages`)
+- `--quiet` (`-q`): suppress status messages
+- `--verbose` (`-v`): show last installed packages per package manager
+- `--list-sections` (`-l`): list all available sections and exit
+- `section_audio`: PipeWire/PulseAudio/ALSA audio device detection
+- `section_usb`: USB device summary via `lsusb`
+- `section_input`: keyboard and pointing device detection
+- `section_virtualization`: VM, container, WSL, and bare-metal detection
+- BATS test suite with 28 test cases
+- GitHub Actions CI (ShellCheck, BATS, bash syntax check)
+
+### Changed
+
+- `-v` is now `--verbose` (was `--version`); `-V` is now `--version`
+- Display manager version check wrapped in `timeout 2` to prevent hangs
+
+### Fixed
+
+- `plasmalogin --version` hang on KDE systems (now wrapped in `timeout 2`)
+
 ## [0.6.1] - 2026-02-28
 
 ### Fixed
