@@ -152,11 +152,11 @@ SCRIPT="${BATS_TEST_DIRNAME}/../sysinfo2md.sh"
 }
 
 @test "--only takes precedence over --exclude" {
-    run bash "$SCRIPT" --exclude battery --only battery,os --stdout
+    run bash "$SCRIPT" --exclude cpu --only cpu,os --stdout
     [[ $status -eq 0 ]]
     [[ "$output" == *"## Operating System"* ]]
-    [[ "$output" == *"## Battery"* ]]
-    [[ "$output" != *"## CPU"* ]]
+    [[ "$output" == *"## CPU"* ]]
+    [[ "$output" != *"## Memory"* ]]
 }
 
 @test "--only with new audio section includes it" {
