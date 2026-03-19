@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VERSION="0.7.0"
+VERSION="2026.03.19"
 
 OUTPUT_FILE="$HOME/sysinfo.md"
 COPY_TO_CLIPBOARD=false

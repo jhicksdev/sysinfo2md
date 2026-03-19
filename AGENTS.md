@@ -125,10 +125,11 @@ Sections are registered in `SECTIONS` array via `register_section()`. The `build
 
 ## Versioning
 
-Follow Semantic Versioning. When bumping:
-1. Update `VERSION` in `sysinfo2md.sh`
-2. Add entry to `CHANGELOG.md`
+Follow date-based versioning (`YYYY.MM.DD`). When bumping:
+1. Update `VERSION` in `sysinfo2md.sh` (use today's date)
+2. Add entry to `CHANGELOG.md` with the same date
 3. Update feature list in README.md
+4. Only push to GitHub once per day — accumulate changes and push together
 
 ## File Structure
 

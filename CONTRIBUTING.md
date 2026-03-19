@@ -79,13 +79,7 @@ foo) section_foo ;;
 
 ## Versioning
 
-This project follows [Semantic Versioning](https://semver.org/):
-
-- **Patch** (`0.x.1`) — bug fixes and small corrections
-- **Minor** (`0.x+1.0`) — new features or sections
-- **Major** (`1.0.0`) — first full, polished release (reserved)
-
-When bumping the version, update `VERSION` in `sysinfo2md.sh` and add an entry to `CHANGELOG.md`.
+This project follows date-based versioning (`YYYY.MM.DD`). When bumping the version, update `VERSION` in `sysinfo2md.sh` (use today's date) and add an entry to `CHANGELOG.md`. Only push to GitHub once per day — accumulate changes and push together.
 
 ## Submitting a pull request
 
