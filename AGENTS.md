@@ -129,7 +129,24 @@ Follow date-based versioning (`YYYY.MM.DD`). When bumping:
 1. Update `VERSION` in `sysinfo2md.sh` (use today's date)
 2. Add entry to `CHANGELOG.md` with the same date
 3. Update feature list in README.md
-4. Only push to GitHub once per day — accumulate changes and push together
+
+## Workflow
+
+### Branching Strategy
+- **Feature work**: Create a new branch from `main` (e.g. `feature/my-feature`)
+- **Commits**: Make atomic commits as you work — these stay local until the daily push
+- **Daily push**: Push accumulated changes to `main` once per day — the feature branch merges into `main` via PR
+- **One release per day**: The `VERSION` in `sysinfo2md.sh` reflects the day the changes land on `main`
+
+### Daily Push Checklist
+Before pushing to `main`:
+1. Merge or rebase the feature branch into `main`
+2. Run the full test suite: `bats tests/`
+3. Run syntax check: `bash -n sysinfo2md.sh`
+4. Update `VERSION` in `sysinfo2md.sh` to today's date (e.g. `2026.03.19`)
+5. Add/update entry in `CHANGELOG.md`
+6. Update feature list in `README.md` if applicable
+7. Push to `main` — GitHub Actions CI will run automatically
 
 ## File Structure
 
