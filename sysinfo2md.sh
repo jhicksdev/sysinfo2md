@@ -1,15 +1,95 @@
 #!/usr/bin/env bash
 # sysinfo2md — gather system hardware/software info and write to Markdown
-# Usage: sysinfo2md [-o FILE] [-c] [-C] [-h]
+# Usage: sysinfo2md [OPTIONS]
 
 set -euo pipefail
 
-VERSION="0.6.1"
+VERSION="0.7.0"
 
 OUTPUT_FILE="$HOME/sysinfo.md"
 COPY_TO_CLIPBOARD=false
 CLIPBOARD_ONLY=false
 STDOUT_ONLY=false
+QUIET=false
+VERBOSE_PACKAGES=false
+ONLY_SECTIONS=()
+EXCLUDE_SECTIONS=()
+
+declare -a SECTIONS=()
+declare -a REGISTERED_SECTIONS=()
+
+register_section() {
+    SECTIONS+=("$1")
+    REGISTERED_SECTIONS+=("$1")
+}
+
+is_section_enabled() {
+    local section="$1"
+
+    if [[ ${#ONLY_SECTIONS[@]} -gt 0 ]]; then
+        for s in "${ONLY_SECTIONS[@]}"; do
+            [[ "$s" == "$section" ]] && return 0
+        done
+        return 1
+    fi
+
+    for s in "${EXCLUDE_SECTIONS[@]}"; do
+        [[ "$s" == "$section" ]] && return 1
+    done
+
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# Section registration (called early so --help/--list work)
+# ---------------------------------------------------------------------------
+register_all_sections() {
+    register_section "os"
+    register_section "cpu"
+    register_section "memory"
+    register_section "gpu"
+    register_section "storage"
+    register_section "network"
+    register_section "desktop"
+    register_section "shell"
+    register_section "packages"
+    register_section "battery"
+    register_section "audio"
+    register_section "usb"
+    register_section "input"
+    register_section "virtualization"
+}
+
+register_all_sections
+
+is_section_enabled() {
+    local section="$1"
+
+    if [[ ${#ONLY_SECTIONS[@]} -gt 0 ]]; then
+        for s in "${ONLY_SECTIONS[@]}"; do
+            [[ "$s" == "$section" ]] && return 0
+        done
+        return 1
+    fi
+
+    for s in "${EXCLUDE_SECTIONS[@]}"; do
+        [[ "$s" == "$section" ]] && return 1
+    done
+
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# Messaging helpers
+# ---------------------------------------------------------------------------
+msg() {
+    $QUIET && return
+    echo "$*"
+}
+
+err() {
+    echo "sysinfo2md: $*" >&2
+}
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -21,15 +101,33 @@ Usage: sysinfo2md [OPTIONS]
 Collect system hardware and software information and write it to a Markdown file.
 
 Options:
-  -o, --output FILE    Output file path (default: ~/sysinfo.md)
-  -s, --stdout         Print to stdout instead of writing a file
-  -c, --clipboard      Write to file AND copy to clipboard
-  -C, --clipboard-only Copy to clipboard only, do not write a file
-  -v, --version        Show version and exit
-  -h, --help           Show this help message and exit
+  -o, --output FILE     Output file path (default: ~/sysinfo.md)
+  -s, --stdout          Print to stdout instead of writing a file
+  -c, --clipboard       Write to file AND copy to clipboard
+  -C, --clipboard-only  Copy to clipboard only, do not write a file
+  -q, --quiet           Suppress status messages
+  -v, --verbose         Show recent packages (when supported)
+  -e, --exclude SECTIONS
+                        Comma-separated list of sections to exclude
+                        (e.g. --exclude battery,packages)
+  -n, --only SECTIONS   Include only the specified sections (overrides --exclude)
+                        Use --list-sections to see available sections
+  -l, --list-sections   List available sections and exit
+  -V, --version        Show version and exit
+  -h, --help            Show this help message and exit
+
+Available sections: os, cpu, memory, gpu, storage, network, desktop,
+                    shell, packages, battery, audio, usb, input, virtualization
 
 Clipboard backends (tried in order): wl-copy (Wayland), xclip, xsel
 EOF
+}
+
+list_sections() {
+    echo "Available sections:"
+    for s in "${SECTIONS[@]}"; do
+        echo "  - $s"
+    done
 }
 
 while [[ $# -gt 0 ]]; do
@@ -50,16 +148,36 @@ while [[ $# -gt 0 ]]; do
             CLIPBOARD_ONLY=true
             shift
             ;;
-        -v|--version)
+        -q|--quiet)
+            QUIET=true
+            shift
+            ;;
+        -V|--version)
             echo "sysinfo2md $VERSION"
             exit 0
+            ;;
+        -l|--list-sections)
+            list_sections
+            exit 0
+            ;;
+        -v|--verbose)
+            VERBOSE_PACKAGES=true
+            shift
+            ;;
+        -e|--exclude)
+            IFS=',' read -ra EXCLUDE_SECTIONS <<< "$2"
+            shift 2
+            ;;
+        -n|--only)
+            IFS=',' read -ra ONLY_SECTIONS <<< "$2"
+            shift 2
             ;;
         -h|--help)
             usage
             exit 0
             ;;
         *)
-            echo "sysinfo2md: unknown option '$1'" >&2
+            err "unknown option '$1'"
             usage >&2
             exit 1
             ;;
@@ -73,15 +191,15 @@ copy_to_clipboard() {
     local content="$1"
     if command -v wl-copy &>/dev/null; then
         printf '%s' "$content" | wl-copy
-        echo "Copied to clipboard via wl-copy (Wayland)."
+        msg "Copied to clipboard via wl-copy (Wayland)."
     elif command -v xclip &>/dev/null; then
         printf '%s' "$content" | xclip -selection clipboard
-        echo "Copied to clipboard via xclip (X11)."
+        msg "Copied to clipboard via xclip (X11)."
     elif command -v xsel &>/dev/null; then
         printf '%s' "$content" | xsel --clipboard --input
-        echo "Copied to clipboard via xsel (X11)."
+        msg "Copied to clipboard via xsel (X11)."
     else
-        echo "Warning: no clipboard tool found (install wl-copy, xclip, or xsel)." >&2
+        err "no clipboard tool found (install wl-copy, xclip, or xsel)."
     fi
 }
 
@@ -190,7 +308,6 @@ section_gpu() {
     else
         echo "_lspci not available._"
     fi
-    # NVIDIA extra info
     if command -v nvidia-smi &>/dev/null; then
         echo ""
         echo "**NVIDIA driver info:**"
@@ -199,7 +316,6 @@ section_gpu() {
             --format=csv,noheader 2>/dev/null || true
         echo '```'
     fi
-    # AMD extra info
     if command -v radeontop &>/dev/null; then
         echo ""
         echo "_radeontop is available for AMD GPU monitoring._"
@@ -254,7 +370,6 @@ section_desktop() {
         echo "- **Display server**: $XDG_SESSION_TYPE"
         found=true
     fi
-    # Display manager
     local dm_id=""
     if command -v systemctl &>/dev/null; then
         dm_id=$(systemctl show display-manager.service --no-pager --property=Id 2>/dev/null \
@@ -263,12 +378,11 @@ section_desktop() {
     if [[ -n "$dm_id" && "$dm_id" != "Id" ]]; then
         local dm_ver=""
         if command -v "$dm_id" &>/dev/null; then
-            dm_ver=$("$dm_id" --version 2>/dev/null | head -1 | xargs) || true
+            dm_ver=$(timeout 2 "$dm_id" --version 2>/dev/null | head -1 | xargs || true)
         fi
         echo "- **Display manager**: $dm_id${dm_ver:+ $dm_ver}"
         found=true
     fi
-    # Window manager
     local wm=""
     for wm_bin in kwin_wayland kwin_x11 mutter gnome-shell openbox i3 sway bspwm xfwm4 marco fluxbox icewm; do
         if pgrep -x "$wm_bin" &>/dev/null; then
@@ -277,7 +391,6 @@ section_desktop() {
         fi
     done
     [[ -n "$wm" ]] && echo "- **Window manager**: $wm" && found=true
-    # Screen resolution
     local resolution=""
     if command -v xrandr &>/dev/null && [[ -n "${DISPLAY:-}" ]]; then
         resolution=$(xrandr 2>/dev/null | grep ' connected' | grep -oP '\d+x\d+(?=\+)' | head -1 || true)
@@ -286,7 +399,6 @@ section_desktop() {
         resolution=$(cat /sys/class/drm/*/modes 2>/dev/null | head -1 || true)
     fi
     [[ -n "$resolution" ]] && echo "- **Resolution**: $resolution" && found=true
-    # Wayland/X display
     if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
         echo "- **Wayland display**: $WAYLAND_DISPLAY"
         found=true
@@ -295,7 +407,6 @@ section_desktop() {
         echo "- **X display**: $DISPLAY"
         found=true
     fi
-    # KDE theme and icons
     if [[ -f ~/.config/kdeglobals ]]; then
         local kde_theme kde_icons
         kde_theme=$(awk -F= '/^\[KDE\]/{s=1;next} /^\[/{s=0} s && /^LookAndFeelPackage=/{print $2;exit}' \
@@ -305,7 +416,6 @@ section_desktop() {
         [[ -n "$kde_theme" ]] && echo "- **Theme**: $kde_theme" && found=true
         [[ -n "$kde_icons" ]] && echo "- **Icons**: $kde_icons" && found=true
     fi
-    # GTK/GNOME theme, icons, and font
     local gtk_theme="" gtk_icons="" gtk_font=""
     local gtk_cfg=~/.config/gtk-3.0/settings.ini
     if [[ -f "$gtk_cfg" ]]; then
@@ -347,23 +457,53 @@ section_packages() {
     echo ""
     local found=false
     if command -v pacman &>/dev/null; then
-        echo "- **pacman**: $(pacman -Q 2>/dev/null | wc -l) packages"
+        local count
+        count=$(pacman -Q 2>/dev/null | wc -l)
+        echo "- **pacman**: $count packages"
+        if $VERBOSE_PACKAGES; then
+            echo "  Last installed:"
+            pacman -Q 2>/dev/null | tail -5 | sed 's/^/    /'
+        fi
         found=true
     fi
     if command -v dpkg &>/dev/null; then
-        echo "- **dpkg**: $(dpkg -l 2>/dev/null | grep -c '^ii') packages"
+        local count
+        count=$(dpkg -l 2>/dev/null | grep -c '^ii')
+        echo "- **dpkg**: $count packages"
+        if $VERBOSE_PACKAGES; then
+            echo "  Last installed:"
+            dpkg -l 2>/dev/null | grep '^ii' | tail -5 | awk '{print "    " $2 " " $3}'
+        fi
         found=true
     fi
     if command -v rpm &>/dev/null; then
-        echo "- **rpm**: $(rpm -qa 2>/dev/null | wc -l) packages"
+        local count
+        count=$(rpm -qa 2>/dev/null | wc -l)
+        echo "- **rpm**: $count packages"
+        if $VERBOSE_PACKAGES; then
+            echo "  Last installed:"
+            rpm -qa --last 2>/dev/null | head -5 | sed 's/^/    /'
+        fi
         found=true
     fi
     if command -v flatpak &>/dev/null; then
-        echo "- **flatpak**: $(flatpak list 2>/dev/null | wc -l) packages"
+        local count
+        count=$(flatpak list 2>/dev/null | wc -l)
+        echo "- **flatpak**: $count packages"
+        if $VERBOSE_PACKAGES; then
+            echo "  Installed apps:"
+            flatpak list 2>/dev/null | tail -5 | sed 's/^/    /'
+        fi
         found=true
     fi
     if command -v snap &>/dev/null; then
-        echo "- **snap**: $(snap list 2>/dev/null | tail -n +2 | wc -l) packages"
+        local count
+        count=$(snap list 2>/dev/null | tail -n +2 | wc -l)
+        echo "- **snap**: $count packages"
+        if $VERBOSE_PACKAGES; then
+            echo "  Installed snaps:"
+            snap list 2>/dev/null | tail -n +2 | tail -5 | sed 's/^/    /'
+        fi
         found=true
     fi
     if ! $found; then
@@ -402,6 +542,126 @@ section_battery() {
     fi
 }
 
+section_audio() {
+    echo "## Audio"
+    echo ""
+    local found=false
+
+    if command -v pactl &>/dev/null; then
+        local sinks
+        sinks=$(pactl list short sinks 2>/dev/null)
+        if [[ -n "$sinks" ]]; then
+            echo "### Playback devices (PipeWire/PulseAudio)"
+            while IFS= read -r line; do
+                local name desc
+                name=$(echo "$line" | awk '{print $2}')
+                desc=$(pactl list sinks 2>/dev/null | awk -v n="$name" '/Name: /{f=$2==n} f && /Description: /{print $3; exit}')
+                echo "- $desc"
+            done <<< "$sinks"
+            found=true
+        fi
+    fi
+
+    if [[ -f /proc/asound/cards ]] && ! command -v pactl &>/dev/null; then
+        echo "### ALSA devices"
+        local card
+        while IFS= read -r line; do
+            card=$(echo "$line" | sed 's/^ *//' | cut -d' ' -f1)
+            local card_name
+            card_name=$(echo "$line" | sed 's/^ *//' | cut -d'[' -f2 | cut -d']' -f1)
+            echo "- **Card $card**: $card_name"
+        done < /proc/asound/cards
+        found=true
+    fi
+
+    if [[ -d /usr/share/pipewire ]] || [[ -d /etc/pipewire ]]; then
+        echo "- **Audio server**: PipeWire detected"
+        found=true
+    fi
+
+    if ! $found; then
+        echo "_No audio device information available._"
+    fi
+}
+
+section_usb() {
+    echo "## USB Devices"
+    echo ""
+    if ! command -v lsusb &>/dev/null; then
+        echo "_lsusb not available (install usbutils)._"
+        return
+    fi
+    echo '```'
+    lsusb 2>/dev/null || echo "_Unable to access USB devices._"
+    echo '```'
+}
+
+section_input() {
+    echo "## Input Devices"
+    echo ""
+    local found=false
+
+    if command -v xinput &>/dev/null && [[ -n "${DISPLAY:-}" ]]; then
+        echo "### Pointing devices"
+        xinput list 2>/dev/null | grep -i 'pointer' | grep -v 'Virtual' | while IFS= read -r line; do
+            echo "- ${line##*\$ }"
+        done
+        found=true
+    fi
+
+    if [[ -d /dev/input ]]; then
+        local kbd_name=""
+        for ev in /dev/input/event*; do
+            [[ -r "$ev" ]] || continue
+            local name
+            name=$(cat /sys/class/input/"$(basename "$ev")"/device/name 2>/dev/null || true)
+            [[ -n "$name" ]] && echo "- **Keyboard**: $name" && found=true && break
+        done
+    fi
+
+    if ! $found; then
+        echo "_No input device information available._"
+    fi
+}
+
+section_virtualization() {
+    echo "## Virtualization"
+    echo ""
+    local virt=""
+    local details=""
+
+    if grep -qi 'microsoft' /proc/version 2>/dev/null; then
+        virt="WSL"
+        if [[ -f /proc/version ]] && grep -qi 'wsl2' /proc/version 2>/dev/null; then
+            details="WSL 2"
+        else
+            details="WSL 1"
+        fi
+    elif grep -qiE 'qemu|kvm|bochs' /proc/sys/fs/binfmt_misc/qemu 2>/dev/null; then
+        virt="QEMU/KVM"
+    elif [[ -f /sys/class/dmi/id/product_name ]]; then
+        local pname
+        pname=$(cat /sys/class/dmi/id/product_name 2>/dev/null || true)
+        if grep -qiE 'virtualbox|vmware|qemu|kvm' <<< "$pname"; then
+            virt="$pname"
+        fi
+    fi
+
+    if [[ -z "$virt" ]] && [[ -f /proc/1/cgroup ]]; then
+        if grep -qiE 'docker|lxc|containerd' /proc/1/cgroup 2>/dev/null; then
+            virt="Container"
+        fi
+    fi
+
+    if [[ -n "$virt" ]]; then
+        echo "- **Type**: $virt"
+        [[ -n "$details" ]] && echo "- **Details**: $details"
+        echo "- **Note**: Running inside a virtualized environment — hardware info may be limited or virtualized."
+    else
+        echo "- **Type**: Bare metal"
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -414,25 +674,35 @@ build_markdown() {
     echo "_Generated: ${timestamp}_"
     echo ""
 
-    section_os
-    echo ""
-    section_cpu
-    echo ""
-    section_memory
-    echo ""
-    section_gpu
-    echo ""
-    section_storage
-    echo ""
-    section_network
-    echo ""
-    section_desktop
-    echo ""
-    section_shell_and_term
-    echo ""
-    section_packages
-    echo ""
-    section_battery
+    local first=true
+    for section in "${SECTIONS[@]}"; do
+        if ! is_section_enabled "$section"; then
+            continue
+        fi
+
+        case "$section" in
+            os)              section_os ;;
+            cpu)             section_cpu ;;
+            memory)          section_memory ;;
+            gpu)             section_gpu ;;
+            storage)         section_storage ;;
+            network)         section_network ;;
+            desktop)         section_desktop ;;
+            shell)           section_shell_and_term ;;
+            packages)        section_packages ;;
+            battery)         section_battery ;;
+            audio)           section_audio ;;
+            usb)             section_usb ;;
+            input)           section_input ;;
+            virtualization)  section_virtualization ;;
+        esac
+
+        if $first; then
+            first=false
+        else
+            echo ""
+        fi
+    done
 }
 
 CONTENT=$(build_markdown)
@@ -443,7 +713,7 @@ elif $CLIPBOARD_ONLY; then
     copy_to_clipboard "$CONTENT"
 else
     printf '%s\n' "$CONTENT" > "$OUTPUT_FILE"
-    echo "System info written to: $OUTPUT_FILE"
+    msg "System info written to: $OUTPUT_FILE"
     if $COPY_TO_CLIPBOARD; then
         copy_to_clipboard "$CONTENT"
     fi

@@ -19,28 +19,63 @@ bash install.sh
 
 ## Making changes
 
-All logic lives in `sysinfo2md.sh`. Each section of the Markdown output is its own function (e.g. `section_cpu`, `section_gpu`) — adding a new section means writing a new function and calling it in `build_markdown`.
+All logic lives in `sysinfo2md.sh`. Each section of the Markdown output is its own function (e.g. `section_cpu`, `section_gpu`) — adding a new section means writing a new function, registering it with `register_section`, and adding it to the `build_markdown` case statement.
 
 **Before submitting a pull request:**
 
-- Test the script end-to-end: `sysinfo2md --stdout` or `sysinfo2md -o /tmp/test.md && cat /tmp/test.md`
-- Make sure the script passes with `bash -n sysinfo2md.sh` (syntax check)
-- If adding a new section, add an entry for it in the README feature list
+- Test the script end-to-end: `bash sysinfo2md.sh --stdout` or `bash sysinfo2md.sh -o /tmp/test.md && cat /tmp/test.md`
+- Make sure the script passes syntax check: `bash -n sysinfo2md.sh`
+- Run the test suite: `bats tests/` (requires [bats](https://github.com/bats-core/bats-core))
+- If adding a new section, add it to the `register_section` calls and the `build_markdown` case statement
+
+## Testing
+
+The project uses [BATS](https://github.com/bats-core/bats-core) for shell testing.
+
+```bash
+# Install bats (Arch)
+sudo pacman -S bats
+
+# Install bats (Debian/Ubuntu)
+sudo apt-get install bats
+
+# Run all tests
+bats tests/
+
+# Run a single test file
+bats tests/sysinfo2md.bats
+```
+
+Tests cover: `--help`, `--version`, `--list-sections`, `--stdout`, `--only`, `--exclude`, `--quiet`, `--verbose`, output file writing, and error handling.
 
 ## Code style
 
-- Pure Bash — no Python, no external scripts
-- Use `local` for all function-scoped variables
-- Guard all optional commands with `command -v` and provide a graceful fallback
-- Suppress expected errors with `2>/dev/null` rather than letting sections silently disappear
-- Keep new section functions consistent with the existing pattern:
-  ```bash
-  section_foo() {
-      echo "## Foo"
-      echo ""
-      # ... content ...
-  }
-  ```
+- **Pure Bash** — no Python, no external scripts
+- **ShellCheck** — the project is checked with ShellCheck (CI enforces `severity: error`)
+- **Strict mode** — always use `set -euo pipefail`
+- **Use `local`** for all function-scoped variables
+- **Guard optional commands** with `command -v` and provide a graceful fallback
+- **Suppress expected errors** with `2>/dev/null` rather than letting sections silently disappear
+- **Wrap GUI binaries** that may hang in `timeout 2` when calling with `--version`
+- **Keep new section functions consistent** with the existing pattern:
+
+```bash
+section_foo() {
+    echo "## Foo"
+    echo ""
+    # ... content ...
+}
+```
+
+- **Register new sections** at the top of the script (after `register_all_sections`) and add to the `build_markdown` case statement:
+
+```bash
+# In register_all_sections():
+register_section "foo"
+
+# In build_markdown() case statement:
+foo) section_foo ;;
+```
 
 ## Versioning
 
